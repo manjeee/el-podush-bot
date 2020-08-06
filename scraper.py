@@ -1,3 +1,7 @@
+#TODO использование в контексте (при переводах)
+#TODO видос (команда)
+#TODO видео дня
+
 import vk_api
 import json
 import telebot
@@ -8,9 +12,11 @@ class CredReader():
     def __init__(self, file_name):
         f = open(file_name,)
         data = json.load(f)
+
         self.login = data['login']
         self.password = data['password']
         self.tlgrm_token = data['tlgrm_token']
+
         f.close()
 
 class Scraper():
@@ -73,6 +79,73 @@ class Scraper():
 
         return f"{text}\n{desc}\n{url}"
 
+from googletrans import Translator
+from langdetect import detect
+
+import re 
+
+class GoogleTranslate():
+    def __init__(self, split):
+        self.sentense = ' '.join(x for x in split[1:])
+        self.translator = Translator()
+        self.russian_letters = ""
+
+    def has_cyrillics(self, text):
+        return bool(re.search('[а-яА-Я]', text))
+
+    def run(self):
+        print(self.sentense)
+        # нужно обращение к API переводчика
+
+        if self.has_cyrillics(self.sentense):
+            src = "ru"
+            dest = "en"
+        else:
+            src = "en"
+            dest = "ru"
+
+        print(f"src={src}")
+        print(f"dest={dest}")
+
+        result = self.translator\
+            .translate(self.sentense, src=src, dest=dest)\
+            .text
+        
+        return result
+
+class NoCommand():
+    def __init__(self, command):
+        self.command = command
+
+    def run(self):
+        return f"{self.command} неизвестная мне команда"
+
+
+# TODO подумать над названием... 
+class JustSyntax():
+    def __init__(self):
+        pass
+
+    def commandsHandleClassesFactory(self, command, split):
+        cmd = command.lower()
+
+        if (cmd == "перевести"  \
+            or cmd == "перевод" \
+            or cmd == "t" \
+            or cmd == "п" \
+            or cmd == "переведи"):
+            
+            return GoogleTranslate(split)
+        else:
+            return NoCommand(command)
+
+    def analyze(self, text):
+        split = text.split(" ", -1)
+        output = self.commandsHandleClassesFactory(split[0], 
+            split).run()
+        return output
+        
+
 class TelegramBot():
     def __init__(self, cred, db):
         self.db = db
@@ -88,6 +161,19 @@ class TelegramBot():
                 self.bot.reply_to(message, f"Я тебя запомнил {message.chat.first_name}")
             else:
                 self.bot.reply_to(message, f"Ты уже у меня в базе {message.chat.first_name}")
+
+        @self.bot.message_handler(commands=['btc'])
+        def handle_btc(message):
+            url = "https://blockchain.info/q/24hrprice"
+
+        @self.bot.message_handler(func=lambda m: True)
+        def handle_simple_talk(message):
+            print(message.text)
+            commandOutput = JustSyntax().analyze(message.text)
+            self.bot.reply_to(message, commandOutput)
+
+
+            
 
     def polling(self):
         self.bot.polling()
